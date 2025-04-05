@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request
 from candidate_keys import RelationAnalyzer
+import os
 
 app = Flask(__name__)
 
@@ -23,10 +24,11 @@ def index():
         both = analyzer.categories.both
 
     return render_template('index.html', 
-                           candidate_keys=candidate_keys,
-                           attributes=attributes,
-                           left=left, right=right,
-                           neither=neither, both=both)
+                          candidate_keys=candidate_keys,
+                          attributes=attributes,
+                          left=left, right=right,
+                          neither=neither, both=both)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port) 

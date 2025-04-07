@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Database Normalization Tool</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <h1>Database Normalization Tool</h1>
+
+    <div class="section">
+        <h2>Find Candidate Keys</h2>
+        <form method="POST">
+            <label>Enter Relation (comma-separated):</label>
+            <input type="text" name="relation" value="A,B,C" required onchange="updateClosureField()">
+
+            <label>Enter Functional Dependencies (e.g., A->B,B->C):</label>
+            <input type="text" name="dependencies" value="AB->C,C->B" required onchange="updateClosureField()">
+
+            <button type="submit" name="action" value="find_keys">Find Candidate Keys</button>
+        </form>
+
+        {% if candidate_keys %}
+        <div class="output">
+            <h3>Candidate Key(s):</h3>
+            <div class="key-box">{{ candidate_keys }}</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="section">
+        <h2>Find Attribute Closure</h2>
+        <form id="closureForm">
+            <label>Enter Attributes to Find Closure (e.g., AB):</label>
+            <input type="text" id="closureAttributes" value="AB" required>
+            <input type="hidden" id="currentDependencies" value="{{ dependencies or 'AB->C,C->B' }}">
+            <input type="hidden" id="currentRelation" value="{{ relation or 'A,B,C' }}">
+
+            <button type="button" onclick="findClosure()">Find Closure</button>
+        </form>
+
+        <div id="closureResult" class="output" style="display: none;">
+            <h3>Closure Result:</h3>
+            <div class="key-box" id="closureOutput"></div>
+        </div>
+    </div>
+
+
+    <div class="section">
+        <h2>Normalize Relation</h2>
+        <div>
+            <button type="button" id="normalizeBtn">Normalize</button>
+        </div>
+
+        <div id="normalizationResults" class="output" style="display: none;">
+            <h3>Normalization Results:</h3>
+            <div id="normalizationOutput"></div>
+            <div id="decompositionSteps" class="decomposition-steps" style="display: none;">
+                <h4>Decomposition Steps</h4>
+                <div id="stepsOutput"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Function to update closure field based on current relation
+        function updateClosureField() {
+            const relation = document.querySelector('input[name="relation"]').value;
+            const attributes = relation.split(',').map(attr => attr.trim());
+            if (attributes.length > 0) {
+                document.getElementById('closureAttributes').value = attributes[0];
+                document.getElementById('currentRelation').value = relation;
+            }
+        }
+
+        // Function to parse functional dependencies
+        function parseDependencies(depsStr) {
+            return depsStr.split(',').map(dep => {
+                const [left, right] = dep.split('->');
+                return { left: left.trim(), right: right.trim() };
+            });
+        }
+
+        // Function to compute closure
+        function computeClosure(attributes, dependencies) {
+            let closure = new Set(attributes);
+            let changed = true;
+
+            while (changed) {
+                changed = false;
+                for (const dep of dependencies) {
+                    if (isSubset(dep.left, closure)) {
+                        const newAttrs = difference(dep.right, closure);
+                        if (newAttrs.size > 0) {
+                            closure = new Set([...closure, ...newAttrs]);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+
+            return Array.from(closure).sort().join('');
+        }
+
+        // Helper functions
+        function isSubset(str, set) {
+            return Array.from(str).every(char => set.has(char));
+        }
+
+        function difference(str, set) {
+            return new Set(Array.from(str).filter(char => !set.has(char)));
+        }
+
+        // Function to find closure
+        function findClosure() {
+            const attributes = document.getElementById('closureAttributes').value;
+            const depsStr = document.querySelector('input[name="dependencies"]').value;
+            const dependencies = parseDependencies(depsStr);
+
+            const closure = computeClosure(attributes, dependencies);
+
+            document.getElementById('closureOutput').textContent = closure;
+            document.getElementById('closureResult').style.display = 'block';
+        }
+
+        // Helper functions for checking normal forms
+        function checkPartialDependencies(dependencies, allAttributes) {
+            // Find candidate keys first
+            const candidateKeys = findCandidateKeys(dependencies, allAttributes);
+            
+            // Get all prime attributes (attributes that are part of any candidate key)
+            const primeAttributes = new Set();
+            for (const key of candidateKeys) {
+                for (const attr of key) {
+                    primeAttributes.add(attr);
+                }
+            }
+            
+            // Get all non-prime attributes
+            const nonPrimeAttributes = new Set();
+            for (const attr of allAttributes) {
+                if (!primeAttributes.has(attr)) {
+                    nonPrimeAttributes.add(attr);
+                }
+            }
+            
+            // Check for partial dependencies only on non-prime attributes
+            for (const dep of dependencies) {
+                // Skip if right side contains any prime attributes
+                const hasPrimeAttr = Array.from(dep.right).some(attr => primeAttributes.has(attr));
+                if (hasPrimeAttr) continue;
+                
+                // For each candidate key
+                for (const key of candidateKeys) {
+                    // Check if the left side is a proper subset of the candidate key
+                    if (dep.left.length < key.length && isSubset(dep.left, new Set(key))) {
+                        return true; // Found a partial dependency on a non-prime attribute
+                    }
+                }
+            }
+            
+            return false;
+        }
+
+        function checkTransitiveDependencies(dependencies, allAttributes) {
+            // Find candidate keys first
+            const candidateKeys = findCandidateKeys(dependencies, allAttributes);
+            
+            for (const dep of dependencies) {
+                // Skip if left side is a superkey
+                const isSuperkey = candidateKeys.some(key => isSubset(key, new Set(dep.left)));
+                if (isSuperkey) continue;
+                
+                // Check if right side is not part of any candidate key
+                const isPartOfKey = candidateKeys.some(key => 
+                    Array.from(dep.right).some(attr => key.includes(attr))
+                );
+                
+                if (!isPartOfKey) {
+                    return true; // Found a transitive dependency
+                }
+            }
+            return false;
+        }
+
+        function checkBCNFViolations(dependencies, allAttributes) {
+            // Find candidate keys first
+            const candidateKeys = findCandidateKeys(dependencies, allAttributes);
+            
+            for (const dep of dependencies) {
+                // Check if left side is not a superkey
+                const isSuperkey = candidateKeys.some(key => isSubset(key, new Set(dep.left)));
+                if (!isSuperkey) {
+                    return true; // Found a BCNF violation
+                }
+            }
+            return false;
+        }
+
+        function findCandidateKeys(dependencies, allAttributes) {
+            const keys = [];
+            const attributes = Array.from(allAttributes);
+            
+            // Try all possible combinations of attributes
+            for (let i = 1; i <= attributes.length; i++) {
+                const combinations = getCombinations(attributes, i);
+                for (const combo of combinations) {
+                    const closure = computeClosure(combo, dependencies);
+                    if (closure.length === attributes.length) {
+                        // Check if this is a minimal key
+                        let isMinimal = true;
+                        for (const key of keys) {
+                            if (isSubset(key, new Set(combo))) {
+                                isMinimal = false;
+                                break;
+                            }
+                        }
+                        if (isMinimal) {
+                            keys.push(combo);
+                        }
+                    }
+                }
+            }
+            
+            return keys;
+        }
+
+        function getCombinations(arr, k) {
+            const result = [];
+            
+            function backtrack(start, current) {
+                if (current.length === k) {
+                    result.push([...current]);
+                    return;
+                }
+                
+                for (let i = start; i < arr.length; i++) {
+                    current.push(arr[i]);
+                    backtrack(i + 1, current);
+                    current.pop();
+                }
+            }
+            
+            backtrack(0, []);
+            return result;
+        }
+
+        // Function to decompose to 2NF
+        function decompose2NF(relation, dependencies) {
+            const steps = [];
+            const newRelations = [];
+            const attributes = relation.split(',').map(attr => attr.trim());
+            const allAttributes = new Set(attributes);
+            
+            // Find candidate keys
+            const candidateKeys = findCandidateKeys(dependencies, allAttributes);
+            
+            // Find partial dependencies
+            for (const dep of dependencies) {
+                for (const key of candidateKeys) {
+                    if (dep.left.length < key.length && isSubset(dep.left, new Set(key))) {
+                        // Found a partial dependency
+                        const newRelation = {
+                            name: `R${newRelations.length + 1}`,
+                            attributes: [...new Set([...dep.left, ...dep.right])].sort().join(','),
+                            dependencies: [`${dep.left}->${dep.right}`]
+                        };
+                        newRelations.push(newRelation);
+                        
+                        // Remove dependent attribute from original relation
+                        const remainingAttrs = attributes.filter(attr => 
+                            !dep.right.includes(attr) || dep.left.includes(attr)
+                        );
+                        
+                        steps.push(`Create relation ${newRelation.name}(${newRelation.attributes}) with FD ${dep.left}->${dep.right}`);
+                        steps.push(`Keep original relation with attributes ${remainingAttrs.join(',')}`);
+                    }
+                }
+            }
+            
+            return { steps, newRelations };
+        }
+
+        // Function to decompose to 3NF
+        function decompose3NF(relation, dependencies) {
+            const steps = [];
+            const newRelations = [];
+            const attributes = relation.split(',').map(attr => attr.trim());
+            const allAttributes = new Set(attributes);
+            
+            // Find candidate keys
+            const candidateKeys = findCandidateKeys(dependencies, allAttributes);
+            
+            // Find transitive dependencies
+            for (const dep of dependencies) {
+                // Skip if left side is a superkey
+                const isSuperkey = candidateKeys.some(key => isSubset(key, new Set(dep.left)));
+                if (isSuperkey) continue;
+                
+                // Check if right side is not part of any candidate key
+                const isPartOfKey = candidateKeys.some(key => 
+                    Array.from(dep.right).some(attr => key.includes(attr))
+                );
+                
+                if (!isPartOfKey) {
+                    // Found a transitive dependency
+                    const newRelation = {
+                        name: `R${newRelations.length + 1}`,
+                        attributes: [...new Set([...dep.left, ...dep.right])].sort().join(','),
+                        dependencies: [`${dep.left}->${dep.right}`]
+                    };
+                    newRelations.push(newRelation);
+                    
+                    // Keep original relation without transitive attribute
+                    const remainingAttrs = attributes.filter(attr => 
+                        !dep.right.includes(attr) || dep.left.includes(attr)
+                    );
+                    
+                    steps.push(`Create relation ${newRelation.name}(${newRelation.attributes}) with FD ${dep.left}->${dep.right}`);
+                    steps.push(`Keep original relation with attributes ${remainingAttrs.join(',')}`);
+                }
+            }
+            
+            return { steps, newRelations };
+        }
+
+        // Function to decompose BCNF
+        function decomposeBCNF(relation, dependencies) {
+            const steps = [];
+            const newRelations = [];
+            const attributes = relation.split(',').map(attr => attr.trim());
+            const allAttributes = new Set(attributes);
+            
+            // Find candidate keys
+            const candidateKeys = findCandidateKeys(dependencies, allAttributes);
+            
+            // Find BCNF violations
+            for (const dep of dependencies) {
+                // Check if left side is not a superkey
+                const isSuperkey = candidateKeys.some(key => isSubset(key, new Set(dep.left)));
+                if (!isSuperkey) {
+                    // Found a BCNF violation
+                    // Create first relation with the violating FD
+                    const newRelation1 = {
+                        name: `R${newRelations.length + 1}`,
+                        attributes: [...new Set([...dep.left, ...dep.right])].sort().join(','),
+                        dependencies: [`${dep.left}->${dep.right}`]
+                    };
+                    newRelations.push(newRelation1);
+                    
+                    // Create second relation with remaining attributes
+                    const remainingAttrs = attributes.filter(attr => 
+                        !dep.right.includes(attr) || dep.left.includes(attr)
+                    );
+                    
+                    // Find FDs that apply to the remaining attributes
+                    const remainingDeps = dependencies.filter(d => 
+                        isSubset(d.left, new Set(remainingAttrs)) && 
+                        isSubset(d.right, new Set(remainingAttrs))
+                    );
+                    
+                    const newRelation2 = {
+                        name: `R${newRelations.length + 1}`,
+                        attributes: remainingAttrs.sort().join(','),
+                        dependencies: remainingDeps.map(d => `${d.left}->${d.right}`)
+                    };
+                    newRelations.push(newRelation2);
+                    
+                    steps.push(`Create relation ${newRelation1.name}(${newRelation1.attributes}) with FD ${dep.left}->${dep.right}`);
+                    steps.push(`Create relation ${newRelation2.name}(${newRelation2.attributes}) with remaining FDs`);
+                    
+                    break; // Decompose only once
+                }
+            }
+            
+            return { steps, newRelations };
+        }
+
+        // Function to check normalization and decompose if needed
+        function normalize() {
+            console.log("Normalize function called");
+            
+            const relation = document.querySelector('input[name="relation"]').value;
+            const depsStr = document.querySelector('input[name="dependencies"]').value;
+            console.log("Relation:", relation);
+            console.log("Dependencies:", depsStr);
+            
+            const dependencies = parseDependencies(depsStr);
+            const results = [];
+            
+            // Get all attributes
+            const allAttributes = new Set(relation.split(',').map(attr => attr.trim()));
+            
+            // Check 1NF (assuming atomic attributes)
+            const is1NF = true;
+            results.push({
+                title: "First Normal Form (1NF)",
+                is_normalized: is1NF,
+                message: "✓ Relation is in 1NF (all attributes are atomic)"
+            });
+            
+            // Check 2NF
+            const hasPartialDeps = checkPartialDependencies(dependencies, allAttributes);
+            const twoNFDecomposition = hasPartialDeps ? decompose2NF(relation, dependencies) : { steps: [], newRelations: [] };
+            results.push({
+                title: "Second Normal Form (2NF)",
+                is_normalized: !hasPartialDeps,
+                message: hasPartialDeps ? 
+                    "✗ Relation is not in 2NF (has partial dependencies)" :
+                    "✓ Relation is in 2NF (no partial dependencies)",
+                decomposition: twoNFDecomposition
+            });
+            
+            // Check 3NF
+            const hasTransitiveDeps = checkTransitiveDependencies(dependencies, allAttributes);
+            const threeNFDecomposition = hasTransitiveDeps ? decompose3NF(relation, dependencies) : { steps: [], newRelations: [] };
+            results.push({
+                title: "Third Normal Form (3NF)",
+                is_normalized: !hasTransitiveDeps,
+                message: hasTransitiveDeps ?
+                    "✗ Relation is not in 3NF (has transitive dependencies)" :
+                    "✓ Relation is in 3NF (no transitive dependencies)",
+                decomposition: threeNFDecomposition
+            });
+            
+            // Check BCNF
+            const hasBCNFViolations = checkBCNFViolations(dependencies, allAttributes);
+            const bcNFDecomposition = hasBCNFViolations ? decomposeBCNF(relation, dependencies) : { steps: [], newRelations: [] };
+            results.push({
+                title: "Boyce-Codd Normal Form (BCNF)",
+                is_normalized: !hasBCNFViolations,
+                message: hasBCNFViolations ?
+                    "✗ Relation is not in BCNF (has non-superkey determinants)" :
+                    "✓ Relation is in BCNF (all determinants are superkeys)",
+                decomposition: bcNFDecomposition
+            });
+            
+            // Display results
+            const output = document.getElementById('normalizationOutput');
+            output.innerHTML = results.map(result => `
+                <div class="normalization-result">
+                    <h4>${result.title}</h4>
+                    <p class="${result.is_normalized ? 'success' : 'violation'}">
+                        ${result.message}
+                    </p>
+                    ${result.decomposition && result.decomposition.steps.length > 0 ? `
+                        <div class="decomposition-details">
+                            <h5>Decomposition Steps:</h5>
+                            <ul>
+                                ${result.decomposition.steps.map(step => `<li>${step}</li>`).join('')}
+                            </ul>
+                            <h5>New Relations:</h5>
+                            <ul>
+                                ${result.decomposition.newRelations.map(rel => 
+                                    `<li>${rel.name}(${rel.attributes}) with FDs: ${rel.dependencies.join(', ')}</li>`
+                                ).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+            
+            document.getElementById('normalizationResults').style.display = 'block';
+        }
+
+        // Add event listener for the normalize button
+        document.getElementById('normalizeBtn').addEventListener('click', normalize);
+
+        // Add event listeners to update closure field when relation or dependencies change
+        document.querySelector('input[name="relation"]').addEventListener('change', updateClosureField);
+        document.querySelector('input[name="dependencies"]').addEventListener('change', updateClosureField);
+    </script>
+</body>
+
+</html>

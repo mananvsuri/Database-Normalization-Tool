@@ -26,12 +26,15 @@ body {
     line-height: 1.6;
     padding: 20px;
     min-height: 100vh;
+    font-family: Arial, sans-serif;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 /* Header Styles */
 h1 {
     text-align: center;
-    color: var(--primary-color);
+    color: #333;
     margin: 20px 0 30px;
     font-size: 2.5rem;
     position: relative;
@@ -65,10 +68,10 @@ h3 {
 
 /* Section Styling */
 .section {
-    background-color: #fff;
-    padding: 25px;
-    border-radius: var(--border-radius);
-    margin-bottom: 25px;
+    background-color: #f5f5f5;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 5px;
     box-shadow: var(--card-shadow);
     transition: transform var(--transition-speed), box-shadow var(--transition-speed);
 }
@@ -87,90 +90,91 @@ form {
 }
 
 label {
-    font-weight: 600;
+    display: block;
     margin-bottom: 5px;
-    color: var(--primary-dark);
+    font-weight: bold;
 }
 
 input[type="text"] {
-    padding: 12px 15px;
-    border: 2px solid var(--primary-light);
-    border-radius: var(--border-radius);
-    font-size: 16px;
-    transition: all var(--transition-speed);
-}
-
-input[type="text"]:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.2);
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 button {
-    background-color: var(--primary-color);
+    background-color: #4CAF50;
     color: white;
+    padding: 10px 15px;
     border: none;
-    padding: 12px 20px;
-    border-radius: var(--border-radius);
+    border-radius: 4px;
     cursor: pointer;
-    font-weight: 600;
-    font-size: 16px;
-    transition: all var(--transition-speed);
-    align-self: flex-start;
 }
 
 button:hover {
-    background-color: var(--primary-dark);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background-color: #45a049;
 }
 
-button:active {
-    transform: translateY(0);
-}
-
-/* Output Styles */
 .output {
-    background-color: var(--primary-light);
-    padding: 20px;
-    border-radius: var(--border-radius);
     margin-top: 20px;
-    animation: slideUp 0.5s ease;
+    padding: 15px;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 .key-box {
-    background-color: white;
-    border-left: 4px solid var(--accent-color);
-    padding: 15px;
-    border-radius: var(--border-radius);
-    font-family: monospace;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--primary-dark);
+    background-color: #e9f7ef;
+    padding: 10px;
+    border-radius: 4px;
     margin-top: 10px;
 }
 
 /* Normalization Results */
 .normalization-result {
     margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid #eee;
-}
-
-.normalization-result:last-child {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
 }
 
 .success {
-    color: var(--success-color);
-    font-weight: 600;
+    color: #4CAF50;
 }
 
 .violation {
-    color: var(--error-color);
-    font-weight: 600;
+    color: #f44336;
+}
+
+.decomposition-details {
+    margin-top: 15px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.decomposition-details h5 {
+    margin: 10px 0;
+    color: #333;
+}
+
+.decomposition-details ul {
+    margin-left: 20px;
+    padding-left: 20px;
+}
+
+.decomposition-details li {
+    margin-bottom: 5px;
+    color: #555;
+}
+
+.step {
+    margin-bottom: 15px;
+}
+
+.step ul {
+    margin-left: 20px;
 }
 
 /* Animation Keyframes */
